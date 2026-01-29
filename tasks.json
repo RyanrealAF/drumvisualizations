@@ -4,12 +4,12 @@
         {
             "label": "1. Process Audio (Python)",
             "type": "shell",
-            "command": "${workspaceFolder}/backend/venv/Scripts/python",
+            "command": "${workspaceFolder}/drum-overlay-system/backend/venv/Scripts/python",
             "args": [
                 "process_track.py"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/audio-workspace"
+                "cwd": "${workspaceFolder}/drum-overlay-system/audio-workspace"
             },
             "presentation": {
                 "reveal": "always",
@@ -26,24 +26,39 @@
                 "..\\frontend\\public\\"
             ],
             "options": {
-                "cwd": "${workspaceFolder}/audio-workspace"
+                "cwd": "${workspaceFolder}/drum-overlay-system/audio-workspace"
             },
             "dependsOn": "1. Process Audio (Python)",
             "problemMatcher": [],
             "group": {
                 "kind": "build",
-                "isDefault": true
+                "isDefault": false
             }
         },
         {
             "label": "3. Start Visualizer Server",
             "type": "shell",
-            "command": "npm run dev",
+            "command": "npm run dev -- --open",
             "options": {
-                "cwd": "${workspaceFolder}/frontend"
+                "cwd": "${workspaceFolder}/drum-overlay-system/frontend"
             },
             "isBackground": true,
-            "problemMatcher": []
+            "problemMatcher": {
+                "owner": "custom",
+                "pattern": {
+                    "regexp": "^$"
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "VITE",
+                    "endsPattern": "Local:"
+                }
+            },
+            "dependsOn": "2. Update Frontend Data",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
         }
     ]
 }
