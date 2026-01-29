@@ -135,6 +135,21 @@ const App: React.FC = () => {
     });
   }, []);
 
+  const uploadAndSeparate = useCallback(async (fileToUpload: File) => {
+    const form = new FormData();
+    form.append("file", fileToUpload);
+
+    const res = await fetch("http://127.0.0.1:8000/separate", {
+      method: "POST",
+      body: form,
+    });
+
+    const data = await res.json();
+    console.log("Separation result:", data);
+    // Return data for further processing if needed
+    return data;
+  }, []);
+
   const handleRunSeparation = useCallback(async () => {
     setIsProcessing(true);
     setStatusMessage('Initializing Optimized Environment...');
@@ -142,18 +157,34 @@ const App: React.FC = () => {
     setActivatedStems(new Set());
     setProgress(0);
 
-    // Optimized High-Fidelity Extraction Pipeline Simulation
-    await runStep(1, 'Mounting RAM Buffer (/dev/shm)...', 10);
-    await runStep(2, 'RAM-Piped cleaning (FFT Denoise)...', 25);
-    await runStep(3, 'Core Separation (Bypassing Disk I/O)...', 65);
-    activateAllStems();
-    await runStep(4, 'Parallel Refinement (Vocals + Drums)...', 90);
-    await runStep(5, 'Validating Optimized Artifacts...', 95);
-    await runStep(6, 'Final Signal Audit & Cache Sync...', 100);
+    if (file) {
+      try {
+        // Start visual simulation concurrently with the actual upload/process
+        const processingPromise = uploadAndSeparate(file);
+        
+        // Optimized High-Fidelity Extraction Pipeline Simulation (Visuals)
+        await runStep(1, 'Mounting RAM Buffer (/dev/shm)...', 10);
+        await runStep(2, 'RAM-Piped cleaning (FFT Denoise)...', 25);
+        await runStep(3, 'Core Separation (Bypassing Disk I/O)...', 65);
+        
+        // Wait for actual backend result before finalizing
+        await processingPromise;
+        
+        activateAllStems();
+        await runStep(4, 'Parallel Refinement (Vocals + Drums)...', 90);
+        await runStep(5, 'Validating Optimized Artifacts...', 95);
+        await runStep(6, 'Final Signal Audit & Cache Sync...', 100);
+      } catch (error) {
+        console.error("Backend separation failed:", error);
+        setStatusMessage('Error: Backend Connection Failed');
+        setIsProcessing(false);
+        return;
+      }
+    }
 
     setStatusMessage('Mission Complete. Optimized (⚡ Bolt).');
     setIsProcessing(false);
-  }, [runStep, activateAllStems]);
+  }, [runStep, activateAllStems, file, uploadAndSeparate]);
 
 
   return (
