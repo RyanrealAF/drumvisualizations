@@ -1,0 +1,36 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Backend",
+      "type": "python",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": [
+        "api.main:app",
+        "--reload",
+        "--port",
+        "8000"
+      ],
+      "cwd": "${workspaceFolder}/drum-overlay-system/backend",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/drum-overlay-system/backend"
+      },
+      "justMyCode": true
+    },
+    {
+      "name": "Chrome: Frontend",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/drum-overlay-system/frontend"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full Stack",
+      "configurations": ["Python: Backend", "Chrome: Frontend"],
+      "stopAll": true
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drum Visualizer Overlay</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; color: white; font-family: sans-serif; }
+        #info { position: absolute; top: 10px; left: 10px; z-index: 10; pointer-events: none; }
+        #start-btn { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 15px 30px; font-size: 20px; cursor: pointer; z-index: 20; background: #fff; color: #000; border: none; border-radius: 5px; }
+    </style>
+    <!-- Import Map for Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="info">Waiting for interaction...</div>
+    <button id="start-btn">CLICK TO START</button>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // Configuration
+        const DATA_URL = 'drum-data.json';
+        // Note: If you want to play audio, place track.wav in public/ and uncomment audio loading below
+        
+        let camera, scene, renderer;
+        let mesh;
+        let drumData = null;
+        let startTime = 0;
+        let isPlaying = false;
+
+        init();
+        animate();
+
+        function init() {
+            // Scene Setup
+            scene = new THREE.Scene();
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100);
+            camera.position.z = 2;
+
+            // Object (A reactive sphere)
+            const geometry = new THREE.IcosahedronGeometry(0.5, 2);
+            const material = new THREE.MeshNormalMaterial({ wireframe: true });
+            mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000, 0); // Transparent background
+            document.body.appendChild(renderer.domElement);
+
+            // Resize Handler
+            window.addEventListener('resize', onWindowResize);
+
+            // Start Button
+            document.getElementById('start-btn').addEventListener('click', async () => {
+                await loadData();
+                document.getElementById('start-btn').style.display = 'none';
+                document.getElementById('info').innerText = "Visualizer Running";
+                startVisualization();
+            });
+        }
+
+        async function loadData() {
+            try {
+                const response = await fetch(DATA_URL);
+                if (!response.ok) throw new Error('Failed to load drum-data.json');
+                drumData = await response.json();
+                console.log("Drum data loaded:", drumData);
+            } catch (e) {
+                console.error(e);
+                document.getElementById('info').innerText = "Error: drum-data.json not found in public folder.";
+            }
+        }
+
+        function startVisualization() {
+            startTime = performance.now();
+            isPlaying = true;
+            
+            // Optional: Play audio if you have an audio element
+            // const audio = new Audio('track.wav');
+            // audio.play();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isPlaying && drumData) {
+                const currentTime = (performance.now() - startTime) / 1000; // seconds
+                
+                // Find current amplitude from data
+                // Assuming data structure is { "times": [...], "amplitude": [...] }
+                // We find the closest index
+                
+                // Simple optimization: find index based on sample rate (assuming constant hop)
+                // Or just search (for simplicity here)
+                
+                // Let's assume the JSON has a 'peaks' array of { time, strength } for simplicity
+                // Or if it's a time-series, we interpolate.
+                
+                // Fallback logic for the provided python script structure:
+                // The python script below exports 'timeline': [{t, energy}, ...]
+                
+                let currentEnergy = 0;
+                
+                if (drumData.timeline) {
+                    // Find closest frame
+                    const frame = drumData.timeline.find(f => f.t >= currentTime);
+                    if (frame) {
+                        currentEnergy = frame.energy;
+                    }
+                }
+
+                // React to energy
+                const scale = 1 + currentEnergy * 2; // Scale up based on energy
+                mesh.scale.setScalar(scale);
+                
+                // Rotate
+                mesh.rotation.x += 0.01 + (currentEnergy * 0.1);
+                mesh.rotation.y += 0.02 + (currentEnergy * 0.1);
+            } else {
+                // Idle animation
+                mesh.rotation.x += 0.01;
+                mesh.rotation.y += 0.02;
+            }
+
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

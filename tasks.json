@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Run Backend",
+      "type": "shell",
+      "command": "uvicorn api.main:app --reload",
+      "options": {
+        "cwd": "drum-overlay-system/backend"
+      }
+    }
+  ]
+}
