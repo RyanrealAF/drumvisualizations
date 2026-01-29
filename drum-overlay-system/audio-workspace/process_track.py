@@ -9,7 +9,7 @@ import soundfile as sf
 # Configuration
 INPUT_FILE = "track.wav"
 OUTPUT_JSON = "drum-data.json"
-DEMUCS_MODEL = "htdemucs" # High quality model
+DEMUCS_MODEL = "htdemucs_6s" # High quality model
 
 def main():
     if not os.path.exists(INPUT_FILE):
@@ -50,33 +50,49 @@ def main():
     print(f"🥁 Analyzing drums: {stem_path}")
 
     # 3. Analyze Audio for Visualization Data
-    y, sr = librosa.load(stem_path, sr=22050)
+    y, sr = librosa.load(stem_path, sr=None)
     
     # Calculate onset envelope (detect hits)
     onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+    
+    # Detect beats/onsets
+    onsets = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr, units='time')
+    
+    # Normalize data
+    onset_env_norm = librosa.util.normalize(onset_env)
     times = librosa.times_like(onset_env, sr=sr)
 
-    # Normalize energy 0.0 to 1.0
-    if onset_env.max() > 0:
-        onset_env = onset_env / onset_env.max()
+    # 4. Structure Data for 60 FPS Playback
+    fps = 60
+    duration = librosa.get_duration(y=y, sr=sr)
+    total_frames = int(duration * fps)
+    
+    visualizer_data = []
 
-    # 4. Create Timeline Data
-    # We downsample slightly to keep JSON size manageable for web
-    # Taking every 4th frame (approx 40ms resolution is usually enough for visual smoothing)
-    timeline = []
-    step = 2 
-    for i in range(0, len(times), step):
-        energy = float(onset_env[i])
-        if energy > 0.05: # Threshold to remove noise
-            timeline.append({
-                "t": round(float(times[i]), 3),
-                "energy": round(energy, 3)
-            })
+    print(">>> Generating JSON payload...")
+    for i in range(total_frames):
+        t = i / fps
+        # Find closest analysis frame
+        idx = np.argmin(np.abs(times - t))
+        intensity = float(onset_env_norm[idx])
+        
+        # Check if this frame is close to a detected beat
+        is_beat = False
+        if len(onsets) > 0:
+            min_dist = np.min(np.abs(onsets - t))
+            if min_dist < (1.0 / fps):
+                is_beat = True
+
+        visualizer_data.append({
+            "time": round(t, 3),
+            "intensity": round(intensity, 4),
+            "is_beat": is_beat
+        })
 
     output_data = {
-        "track": track_name,
-        "duration": librosa.get_duration(y=y, sr=sr),
-        "timeline": timeline
+        "fps": fps,
+        "duration": duration,
+        "data": visualizer_data
     }
 
     # 5. Save JSON
