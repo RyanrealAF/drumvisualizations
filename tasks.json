@@ -1,13 +1,49 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Run Backend",
-      "type": "shell",
-      "command": "uvicorn api.main:app --reload",
-      "options": {
-        "cwd": "drum-overlay-system/backend"
-      }
-    }
-  ]
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "1. Process Audio (Python)",
+            "type": "shell",
+            "command": "${workspaceFolder}/backend/venv/Scripts/python",
+            "args": [
+                "process_track.py"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/audio-workspace"
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "dedicated"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "2. Update Frontend Data",
+            "type": "shell",
+            "command": "copy",
+            "args": [
+                "drum-data.json",
+                "..\\frontend\\public\\"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}/audio-workspace"
+            },
+            "dependsOn": "1. Process Audio (Python)",
+            "problemMatcher": [],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "3. Start Visualizer Server",
+            "type": "shell",
+            "command": "npm run dev",
+            "options": {
+                "cwd": "${workspaceFolder}/frontend"
+            },
+            "isBackground": true,
+            "problemMatcher": []
+        }
+    ]
 }
