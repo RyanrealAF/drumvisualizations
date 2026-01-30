@@ -12,19 +12,9 @@ $projectRoot = Get-Location
 Write-Host "[1/4] Current directory: $projectRoot" -ForegroundColor Cyan
 
 # Check if we're in the right directory
-if (-not (Test-Path ".\backend\venv")) {
-    Write-Host "ERROR: Virtual environment not found. Please run 'npm install' first." -ForegroundColor Red
-    exit 1
-}
-
-# Activate virtual environment
-Write-Host "[2/4] Activating Python virtual environment..." -ForegroundColor Cyan
-try {
-    . .\backend\venv\Scripts\Activate.ps1
-    Write-Host "✓ Virtual environment activated" -ForegroundColor Green
-}
-catch {
-    Write-Host "ERROR: Failed to activate virtual environment" -ForegroundColor Red
+if (-not (Test-Path ".\audio-workspace\process_track.py")) {
+    Write-Host "ERROR: Please navigate to the drum-overlay-system directory first" -ForegroundColor Red
+    Write-Host "Run: cd drum-overlay-system" -ForegroundColor Yellow
     exit 1
 }
 
@@ -33,6 +23,44 @@ $audioFile = Join-Path $projectRoot "audio-workspace\track.wav"
 if (-not (Test-Path $audioFile)) {
     Write-Host "ERROR: Audio file '$audioFile' not found" -ForegroundColor Red
     Write-Host "Please copy your WAV file to the audio-workspace folder and name it 'track.wav'" -ForegroundColor Yellow
+    exit 1
+}
+
+# Check for virtual environment
+$venvPath = Join-Path $projectRoot "backend\venv"
+if (-not (Test-Path $venvPath)) {
+    Write-Host "WARNING: Virtual environment not found. Creating one..." -ForegroundColor Yellow
+    try {
+        Set-Location (Join-Path $projectRoot "backend")
+        python -m venv venv
+        . .\venv\Scripts\Activate.ps1
+        Write-Host "✓ Virtual environment created" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "ERROR: Failed to create virtual environment" -ForegroundColor Red
+        exit 1
+    }
+}
+else {
+    try {
+        . .\backend\venv\Scripts\Activate.ps1
+        Write-Host "✓ Virtual environment activated" -ForegroundColor Green
+    }
+    catch {
+        Write-Host "ERROR: Failed to activate virtual environment" -ForegroundColor Red
+        exit 1
+    }
+}
+
+# Install Python dependencies
+Write-Host "[2/4] Installing Python dependencies..." -ForegroundColor Cyan
+try {
+    pip install --upgrade pip setuptools wheel
+    pip install demucs librosa soundfile numpy scipy
+    Write-Host "✓ Python dependencies installed" -ForegroundColor Green
+}
+catch {
+    Write-Host "ERROR: Failed to install Python dependencies" -ForegroundColor Red
     exit 1
 }
 
@@ -65,6 +93,7 @@ else {
 Write-Host "[5/5] Starting frontend development server..." -ForegroundColor Cyan
 Set-Location (Join-Path $projectRoot "frontend")
 try {
+    npm install
     npm run dev
     Write-Host "✓ Frontend server started" -ForegroundColor Green
 }
