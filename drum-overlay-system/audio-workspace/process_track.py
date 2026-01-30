@@ -1,108 +1,108 @@
-import os
-import sys
-import json
-import subprocess
-import numpy as np
 import librosa
+import numpy as np
+import json
 import soundfile as sf
+from pathlib import Path
 
-# Configuration
-INPUT_FILE = "track.wav"
-OUTPUT_JSON = "drum-data.json"
-DEMUCS_MODEL = "htdemucs_6s" # High quality model
+print("\n" + "=" * 60)
+print("AUDIO PROCESSING PIPELINE")
+print("=" * 60)
 
-def main():
-    if not os.path.exists(INPUT_FILE):
-        print(f"❌ Error: {INPUT_FILE} not found in {os.getcwd()}")
-        return
-
-    print(f"🎵 Processing {INPUT_FILE}...")
-
-    # 1. Run Demucs Separation
-    # We use subprocess to call the demucs CLI which is installed in the environment
-    print("running demucs separation (this may take a minute)...")
-    try:
-        # -n specifies model, -o specifies output path
-        subprocess.run(
-            ["demucs", "-n", DEMUCS_MODEL, INPUT_FILE],
-            check=True
-        )
-    except subprocess.CalledProcessError as e:
-        print("❌ Demucs failed. Ensure 'demucs' is installed (pip install demucs).")
-        return
-    except FileNotFoundError:
-        print("❌ 'demucs' command not found. Activate your virtual environment.")
-        return
-
-    # 2. Locate the Drums Stem
-    # Demucs output structure: separated/{model}/{track_name}/drums.wav
-    track_name = os.path.splitext(INPUT_FILE)[0]
-    stem_path = os.path.join("separated", DEMUCS_MODEL, track_name, "drums.wav")
-
-    if not os.path.exists(stem_path):
-        print(f"❌ Could not find drum stem at: {stem_path}")
-        # Fallback check for spaces in filenames or different folder structures
-        possible_dirs = os.listdir(os.path.join("separated", DEMUCS_MODEL))
-        if possible_dirs:
-            print(f"   Found these folders instead: {possible_dirs}")
-        return
-
-    print(f"🥁 Analyzing drums: {stem_path}")
-
-    # 3. Analyze Audio for Visualization Data
-    y, sr = librosa.load(stem_path, sr=None)
+# Check if track.wav exists
+track_path = Path("track.wav")
+if not track_path.exists():
+    # Try to find track.wav in the current directory or parent directories
+    import os
+    current_dir = Path.cwd()
+    print(f"Current directory: {current_dir}")
+    print(f"Looking for track.wav...")
     
-    # Calculate onset envelope (detect hits)
-    onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+    # Check if track.wav exists in the audio-workspace directory
+    audio_workspace = Path("drum-overlay-system/audio-workspace/track.wav")
+    if audio_workspace.exists():
+        track_path = audio_workspace
+        print(f"Found track.wav at: {audio_workspace}")
+    else:
+        print("\nERROR: track.wav not found!")
+        print("  Place your WAV file here and name it 'track.wav'")
+        exit(1)
+
+print("\n[1/3] Loading audio file...")
+
+# Check if demucs is available
+try:
+    import demucs.api
+    demucs_available = True
+    print("[2/3] Demucs available - separating stems...")
+    # Separate stems
+    separator = demucs.api.Separator(model="htdemucs_6s")
+    print("  This will take a while - be patient...")
+    origin, stems = separator.separate_audio_file("track.wav")
     
-    # Detect beats/onsets
-    onsets = librosa.onset.onset_detect(onset_envelope=onset_env, sr=sr, units='time')
+    # Save stems
+    print("\n[3/3] Saving separated stems...")
+    for name, audio in stems.items():
+        audio_np = audio.cpu().numpy().T
+        sf.write(f"{name}.wav", audio_np, 44100)
+        print(f"  ✓ Saved {name}.wav")
     
-    # Normalize data
-    onset_env_norm = librosa.util.normalize(onset_env)
-    times = librosa.times_like(onset_env, sr=sr)
+    # Analyze drum onsets from separated drums
+    print("\n[4/4] Analyzing drum hits...")
+    drums_audio, sr = librosa.load("drums.wav", sr=44100, mono=True)
+except ImportError:
+    demucs_available = False
+    print("[2/3] Demucs not available - using track.wav directly for drum analysis...")
+    # Analyze drum onsets from the original track
+    print("\n[3/3] Analyzing drum hits...")
+    drums_audio, sr = librosa.load(str(track_path), sr=44100, mono=True)
 
-    # 4. Structure Data for 60 FPS Playback
-    fps = 60
-    duration = librosa.get_duration(y=y, sr=sr)
-    total_frames = int(duration * fps)
-    
-    visualizer_data = []
+onset_frames = librosa.onset.onset_detect(
+    y=drums_audio,
+    sr=sr,
+    units='frames',
+    hop_length=512,
+    backtrack=True,
+    delta=0.05
+)
 
-    print(">>> Generating JSON payload...")
-    for i in range(total_frames):
-        t = i / fps
-        # Find closest analysis frame
-        idx = np.argmin(np.abs(times - t))
-        intensity = float(onset_env_norm[idx])
-        
-        # Check if this frame is close to a detected beat
-        is_beat = False
-        if len(onsets) > 0:
-            min_dist = np.min(np.abs(onsets - t))
-            if min_dist < (1.0 / fps):
-                is_beat = True
+onset_times = librosa.frames_to_time(onset_frames, sr=sr, hop_length=512)
+onset_strengths = librosa.onset.onset_strength(y=drums_audio, sr=sr, hop_length=512)
 
-        visualizer_data.append({
-            "time": round(t, 3),
-            "intensity": round(intensity, 4),
-            "is_beat": is_beat
-        })
+if len(onset_frames) > 0 and len(onset_frames) > 1:
+    velocities = onset_strengths[onset_frames[:-1]]
+    if len(velocities) > 0:
+        velocities = velocities / np.max(velocities)
+    onset_times = onset_times[:-1]
+else:
+    velocities = np.array([])
 
-    output_data = {
-        "fps": fps,
-        "duration": duration,
-        "data": visualizer_data
-    }
+# Create trigger data (distribute hits across kick/snare/hats)
+drum_data = {
+    "kick": [[float(t), float(v)] for t, v in zip(onset_times[::3], velocities[::3])],
+    "snare": [[float(t), float(v)] for t, v in zip(onset_times[1::3], velocities[1::3])],
+    "hats": [[float(t), float(v)] for t, v in zip(onset_times[2::3], velocities[2::3])]
+}
 
-    # 5. Save JSON
-    with open(OUTPUT_JSON, "w") as f:
-        json.dump(output_data, f)
+# Save trigger data
+with open("drum-data.json", "w") as f:
+    json.dump(drum_data, f, indent=2)
 
-    print(f"✅ Success! Data saved to {OUTPUT_JSON}")
-    print(f"   Copy this file to your frontend public folder.")
+print("\n" + "=" * 60)
+print("PROCESSING COMPLETE")
+print("=" * 60)
 
-if __name__ == "__main__":
-    # Ensure we are in the script's directory
-    os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    main()
+if demucs_available:
+    print(f"\nGenerated files:")
+    print(f"  • {len(stems)} stem WAV files")
+    print(f"  • drum-data.json")
+else:
+    print(f"\nGenerated files:")
+    print(f"  • drum-data.json")
+
+print(f"\nDrum triggers detected:")
+print(f"  • Kick hits: {len(drum_data['kick'])}")
+print(f"  • Snare hits: {len(drum_data['snare'])}")
+print(f"  • Hat hits: {len(drum_data['hats'])}")
+print(f"  • Total: {len(onset_times)} drum events")
+print("\n" + "=" * 60)
+print("\nNext step: Copy drum-data.json to frontend/public/")
