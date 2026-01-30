@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Drum Logo Overlay</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+        }
+
+        #logo-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 900px;
+            height: 900px;
+            will-change: transform, filter;
+        }
+
+        #logo {
+            width: 100%;
+            height: 100%;
+            fill: #3D3631;
+            filter: drop-shadow(0 0 20px rgba(220, 100, 60, 0.5));
+        }
+
+        #particles-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        #logo-container {
+            z-index: 2;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="particles-canvas"></canvas>
+    <div id="logo-container">
+        <svg id="logo" viewBox="0 0 100 100">
+            <text x="50" y="50" text-anchor="middle" dominant-baseline="middle" font-size="40">RYANREALAF</text>
+        </svg>
+    </div>
+
+    <script>
+        class ParticleSystem {
+            constructor(canvasId, particleCount) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.particles = [];
+                this.particleCount = particleCount;
+                this.init();
+            }
+
+            init() {
+                this.resize();
+                this.createParticles();
+                window.addEventListener('resize', () => this.resize());
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+
+            createParticles() {
+                for (let i = 0; i < this.particleCount; i++) {
+                    this.particles.push({
+                        x: Math.random() * this.canvas.width,
+                        y: this.canvas.height * 0.7 + Math.random() * this.canvas.height * 0.3,
+                        vx: (Math.random() - 0.5) * 0.3,
+                        vy: -0.2 - Math.random() * 0.3,
+                        baseAlpha: 0.3 + Math.random() * 0.4,
+                        currentAlpha: 0,
+                        flickerPhase: Math.random() * Math.PI * 2,
+                        size: 1 + Math.random() * 2
+                    });
+                }
+            }
+
+            update() {
+                this.particles.forEach(p => {
+                    // Update position
+                    p.x += p.vx;
+                    p.y += p.vy;
+
+                    // Update velocity with damping
+                    p.vx *= 0.98;
+                    p.vy *= 0.98;
+
+                    // Update alpha with flicker
+                    p.flickerPhase += 0.05;
+                    p.currentAlpha = p.baseAlpha * (0.7 + 0.3 * Math.sin(p.flickerPhase));
+
+                    // Wrap around edges
+                    if (p.x < 0) p.x = this.canvas.width;
+                    if (p.x > this.canvas.width) p.x = 0;
+                    if (p.y < 0) p.y = this.canvas.height;
+                    if (p.y > this.canvas.height) p.y = 0;
+                });
+            }
+
+            draw() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.particles.forEach(p => {
+                    this.ctx.fillStyle = `rgba(200, 200, 220, ${p.currentAlpha})`;
+                    this.ctx.beginPath();
+                    this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                    this.ctx.fill();
+                });
+            }
+
+            trigger(velocity) {
+                // Apply force to random particles
+                const affectedCount = Math.floor(this.particles.length * 0.1);
+                for (let i = 0; i < affectedCount; i++) {
+                    const p = this.particles[Math.floor(Math.random() * this.particles.length)];
+                    const direction = Math.random() > 0.5 ? 1 : -1;
+                    p.vx += direction * velocity * 0.8;
+                    p.flickerPhase += velocity * 2;
+                }
+            }
+        }
+
+        class DrumOverlay {
+            constructor() {
+                this.logoContainer = document.getElementById('logo-container');
+                this.logo = document.getElementById('logo');
+                this.particles = new ParticleSystem('particles-canvas', 800);
+                this.drumData = null;
+                this.currentIndices = { kick: 0, snare: 0, hats: 0 };
+                this.scale = 1.0;
+                this.scaleVelocity = 0;
+                this.startTime = null;
+                this.frameCount = 0;
+
+                this.init();
+            }
+
+            async init() {
+                console.log('=============================================================');
+                console.log('DRUM LOGO OVERLAY - RyanRealAF');
+                console.log('buildwhilebleeding.com');
+                console.log('=============================================================');
+
+                await this.loadDrumData();
+                this.animate();
+            }
+
+            async loadDrumData() {
+                try {
+                    const response = await fetch('drum-data.json');
+                    this.drumData = await response.json();
+                    console.log('✓ Drum data loaded');
+                    console.log(`  Kicks: ${this.drumData.kick.length}`);
+                    console.log(`  Snares: ${this.drumData.snare.length}`);
+                    console.log(`  Hats: ${this.drumData.hats.length}`);
+                } catch (error) {
+                    console.error('Failed to load drum-data.json:', error);
+                    console.log('Continuing in particle-only mode...');
+                }
+            }
+
+            checkTriggers(currentTime) {
+                if (!this.drumData) return;
+
+                // Check kick triggers
+                while (this.currentIndices.kick < this.drumData.kick.length) {
+                    const [time, velocity] = this.drumData.kick[this.currentIndices.kick];
+                    if (time <= currentTime) {
+                        this.triggerKick(velocity);
+                        this.currentIndices.kick++;
+                    } else {
+                        break;
+                    }
+                }
+
+                // Check snare triggers
+                while (this.currentIndices.snare < this.drumData.snare.length) {
+                    const [time, velocity] = this.drumData.snare[this.currentIndices.snare];
+                    if (time <= currentTime) {
+                        this.triggerSnare(velocity);
+                        this.currentIndices.snare++;
+                    } else {
+                        break;
+                    }
+                }
+
+                // Check hats triggers
+                while (this.currentIndices.hats < this.drumData.hats.length) {
+                    const [time, velocity] = this.drumData.hats[this.currentIndices.hats];
+                    if (time <= currentTime) {
+                        this.particles.trigger(velocity);
+                        this.currentIndices.hats++;
+                    } else {
+                        break;
+                    }
+                }
+            }
+
+            triggerKick(velocity) {
+                // Spring physics for scale pump
+                const targetScale = 1.0 + (velocity * 0.25);
+                this.scaleVelocity = (targetScale - this.scale) * 0.3;
+
+                // Color flash
+                const r = Math.floor(61 + velocity * 160);
+                const g = Math.floor(54 + velocity * 46);
+                const b = Math.floor(49 + velocity * 11);
+                this.logo.style.fill = `rgb(${r}, ${g}, ${b})`;
+
+                // Glow effect
+                const blur = 20 + velocity * 60;
+                this.logo.style.filter = `drop-shadow(0 0 ${blur}px rgba(220, 100, 60, ${velocity}))`;
+
+                // Trigger particles
+                this.particles.trigger(velocity);
+            }
+
+            triggerSnare(velocity) {
+                // Sharp cyan flash
+                const shadowColor = `rgba(220, 255, 255, ${velocity})`;
+                const blur = 15 + velocity * 25;
+                this.logo.style.filter = `drop-shadow(0 0 ${blur}px ${shadowColor})`;
+            }
+
+            animate() {
+                const currentTime = performance.now() / 1000;
+
+                if (!this.startTime) {
+                    this.startTime = currentTime;
+                }
+
+                const songTime = currentTime - this.startTime;
+
+                this.checkTriggers(songTime);
+
+                // Update spring physics
+                const springStrength = 0.15;
+                const damping = 0.85;
+                const scaleDiff = 1.0 - this.scale;
+                this.scaleVelocity += scaleDiff * springStrength;
+                this.scaleVelocity *= damping;
+                this.scale += this.scaleVelocity;
+
+                // Apply transform
+                this.logoContainer.style.transform = `translate(-50%, -50%) scale(${this.scale})`;
+
+                // Update and draw particles
+                this.particles.update();
+                this.particles.draw();
+
+                this.frameCount++;
+                requestAnimationFrame(() => this.animate());
+            }
+        }
+
+        // Initialize the overlay
+        const drumOverlay = new DrumOverlay();
+    </script>
+</body>
+</html>

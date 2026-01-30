@@ -180,7 +180,7 @@ cd ../audio-workspace
 
 **Run processing:**
 ```bash
-python process_track.py
+python process_track.py track.wav
 ```
 
 **Wait 30-90 seconds. You'll see:**
@@ -381,7 +381,7 @@ source venv/bin/activate  # Mac/Linux
 
 # Process
 cd ../audio-workspace
-python process_track.py
+python process_track.py track.wav
 ```
 
 ### 3. Copy new data to frontend
@@ -492,7 +492,7 @@ cd backend
 venv\Scripts\activate  # Windows
 source venv/bin/activate  # Mac/Linux
 cd ../audio-workspace
-python process_track.py
+python process_track.py track.wav
 ```
 
 ### Frontend (Start Visualizer)
