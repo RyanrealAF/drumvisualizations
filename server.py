@@ -10,7 +10,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, directory=DIRECTORY, **kwargs)
 
 print(f"Serving at http://localhost:{PORT}")
-print(f"Open http://localhost:{PORT}/src/index.html to view the overlay.")
+print(f"Open http://localhost:{PORT}/index.html to view the overlay.")
 
 with socketserver.TCPServer(("", PORT), Handler) as httpd:
     try:
