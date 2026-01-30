@@ -1,128 +1,164 @@
-"""
-Production Audio Processing Pipeline
-Separates stems using Demucs AI, detects drum onsets with Librosa,
-generates trigger data for real-time visualization.
-
-Requirements:
-- track.wav in same directory
-- Python 3.10+ with venv activated
-- Packages: demucs, librosa, soundfile, numpy
-
-Output:
-- 6 separated stem WAV files (drums, bass, vocals, other, guitar, piano)
-- drum-data.json with timestamped trigger data
-"""
-
-import demucs.api
-import librosa
-import numpy as np
-import json
-import soundfile as sf
-from pathlib import Path
 import sys
+import json
+from pathlib import Path
+import numpy as np
+import librosa
+import soundfile as sf
+from demucs.api import Separator
 
-INPUT_FILE = "track.wav"
-OUTPUT_JSON = "drum-data.json"
-SAMPLE_RATE = 44100
-HOP_LENGTH = 512
 
-KICK_PARAMS = {'delta': 0.05, 'wait': 10, 'fmin': 40, 'fmax': 150}
-SNARE_PARAMS = {'delta': 0.03, 'wait': 8, 'fmin': 150, 'fmax': 6000}
-HATS_PARAMS = {'delta': 0.02, 'wait': 5, 'fmin': 6000, 'fmax': 16000}
-
-def print_header(text):
-    print("\n" + "=" * 60)
-    print(text)
+def print_header():
+    print("=" * 60)
+    print("AUDIO PROCESSING PIPELINE")
     print("=" * 60)
 
-def check_input_file():
-    if not Path(INPUT_FILE).exists():
-        print_header("ERROR")
-        print(f"\n✗ {INPUT_FILE} not found!")
-        print(f"  Place your WAV file in this directory and rename it to: {INPUT_FILE}")
-        sys.exit(1)
 
-def separate_stems():
+def print_footer():
+    print("=" * 60)
+    print("✓ PROCESSING COMPLETE")
+    print("=" * 60)
+
+
+def separate_stems(audio_path: Path, model="htdemucs_6s"):
+    """
+    Separates the audio file into 6 stems using the Demucs Python API.
+    Saves them as WAV files in the current directory.
+    """
     print("[1/4] Initializing Demucs separator...")
-    separator = demucs.api.Separator(model="htdemucs_6s", shifts=1, split=True, overlap=0.25)
-    
-    print("[2/4] Separating stems (30-90 seconds)...")
-    origin, stems = separator.separate_audio_file(INPUT_FILE)
-    
-    print("\n[3/4] Saving separated stems...")
-    stem_dict = {}
-    
-    for name, audio_tensor in stems.items():
-        audio_np = audio_tensor.cpu().numpy()
-        if audio_np.ndim == 2:
-            audio_np = audio_np.T
-        output_path = f"{name}.wav"
-        sf.write(output_path, audio_np, SAMPLE_RATE)
-        stem_dict[name] = audio_np
-        print(f"      ✓ Saved {output_path}")
-    
-    return stem_dict
+    try:
+        separator = Separator(
+            model=model,
+            shifts=1,
+            split=True,
+            overlap=0.25,
+            progress=True
+        )
+    except Exception as e:
+        print(f"❌ Failed to initialize Demucs separator: {e}")
+        print("   Please ensure you have a working internet connection for the first run to download models.")
+        raise
 
-def detect_onsets_frequency_band(audio, sr, params, drum_type):
-    if audio.ndim > 1:
-        audio = librosa.to_mono(audio)
-    
-    D = librosa.stft(audio, hop_length=HOP_LENGTH)
-    freqs = librosa.fft_frequencies(sr=sr)
-    freq_mask = (freqs >= params['fmin']) & (freqs <= params['fmax'])
-    D_band = D[freq_mask, :]
-    onset_env = np.sqrt(np.sum(np.abs(D_band)**2, axis=0))
-    
-    onset_frames = librosa.onset.onset_detect(
-        onset_envelope=onset_env, sr=sr, hop_length=HOP_LENGTH,
-        units='frames', backtrack=True, delta=params['delta'], wait=params['wait']
-    )
-    
-    if len(onset_frames) == 0:
-        print(f"      ⚠ No {drum_type} hits detected")
-        return []
-    
-    onset_times = librosa.frames_to_time(onset_frames, sr=sr, hop_length=HOP_LENGTH)
-    velocities = onset_env[onset_frames]
-    if np.max(velocities) > 0:
-        velocities = velocities / np.max(velocities)
-    
-    hits = [[float(t), float(v)] for t, v in zip(onset_times, velocities)]
-    print(f"      ✓ {drum_type}: {len(hits)} hits detected")
-    return hits
+    print("[2/4] Separating stems (this can take 30-90 seconds)...")
+    try:
+        _, separated_tensors = separator.separate_audio_file(audio_path)
+    except Exception as e:
+        print(f"❌ Demucs separation failed: {e}")
+        raise
 
-def analyze_drum_triggers(stems):
-    print("\n[4/4] Analyzing drum hits...")
-    drums_audio = stems['drums']
-    if drums_audio.ndim > 1:
-        drums_audio = librosa.to_mono(drums_audio)
-    
-    print("      Detecting onsets by frequency...")
-    kick_hits = detect_onsets_frequency_band(drums_audio, SAMPLE_RATE, KICK_PARAMS, "Kick")
-    snare_hits = detect_onsets_frequency_band(drums_audio, SAMPLE_RATE, SNARE_PARAMS, "Snare")
-    hats_hits = detect_onsets_frequency_band(drums_audio, SAMPLE_RATE, HATS_PARAMS, "Hats")
-    
-    return {"kick": kick_hits, "snare": snare_hits, "hats": hats_hits}
+    print("[3/4] Saving separated stems...")
+    saved_stems = []
+    for stem_name, stem_tensor in separated_tensors.items():
+        stem_path = Path(f"{stem_name}.wav")
+        sf.write(stem_path, stem_tensor.T, separator.samplerate)
+        print(f"      ✓ Saved {stem_path.name}")
+        saved_stems.append(stem_path)
 
-def save_trigger_data(drum_data):
-    with open(OUTPUT_JSON, "w") as f:
-        json.dump(drum_data, f, indent=2)
-    
-    total = len(drum_data['kick']) + len(drum_data['snare']) + len(drum_data['hats'])
-    print_header("✓ PROCESSING COMPLETE")
-    print(f"\nGenerated: {OUTPUT_JSON}")
-    print(f"  • Kick:  {len(drum_data['kick'])} hits")
-    print(f"  • Snare: {len(drum_data['snare'])} hits")
-    print(f"  • Hats:  {len(drum_data['hats'])} hits")
-    print(f"  • Total: {total} drum events")
-    print("\n" + "=" * 60)
+    drum_stem_path = Path("drums.wav")
+    if not drum_stem_path.exists():
+        raise FileNotFoundError("drums.wav was not generated by Demucs.")
+
+    return drum_stem_path, separator.samplerate
+
+
+def analyze_drum_hits(drum_track_path: Path, sample_rate: int):
+    """
+    Analyzes the drum track for kick, snare, and hat onsets using Librosa,
+    based on the frequency bands from TECHNICAL_SPECS.md.
+    """
+    print("[4/4] Analyzing drum hits...")
+
+    try:
+        y, sr = librosa.load(drum_track_path, sr=sample_rate)
+    except Exception as e:
+        print(f"❌ Failed to load drum track: {e}")
+        raise
+
+    stft = librosa.stft(y, hop_length=512)
+    stft_mag = np.abs(stft)
+
+    # Configuration from TECHNICAL_SPECS.md
+    hit_config = {
+        "kick": {"fmin": 40, "fmax": 150, "delta": 0.05, "wait": 10},
+        "snare": {"fmin": 150, "fmax": 6000, "delta": 0.03, "wait": 8},
+        "hats": {"fmin": 6000, "fmax": 16000, "delta": 0.02, "wait": 5},
+    }
+
+    all_hits = {}
+    all_velocities = {drum_type: [] for drum_type in hit_config}
+
+    for drum_type, params in hit_config.items():
+        freq_range = librosa.fft_frequencies(sr=sr)
+        freq_bins = (freq_range >= params["fmin"]) & (freq_range <= params["fmax"])
+
+        # Spectral flux in the frequency band
+        onset_env = librosa.onset.onset_strength(S=stft_mag[freq_bins, :], sr=sr)
+        onset_frames = librosa.onset.onset_detect(
+            onset_envelope=onset_env,
+            sr=sr,
+            hop_length=512,
+            units="frames",
+            delta=params["delta"],
+            wait=params["wait"],
+        )
+
+        # Calculate velocity based on energy at onset
+        hit_data = []
+        if len(onset_frames) > 0:
+            onset_times = librosa.frames_to_time(onset_frames, sr=sr, hop_length=512)
+            for i, frame in enumerate(onset_frames):
+                energy = np.sum(stft_mag[freq_bins, frame] ** 2)
+                velocity = np.sqrt(energy)
+                all_velocities[drum_type].append(velocity)
+                hit_data.append([onset_times[i], velocity])
+
+        all_hits[drum_type] = hit_data
+
+    # Normalize velocities for each drum type
+    for drum_type, hits in all_hits.items():
+        max_velocity = np.max(all_velocities[drum_type]) if all_velocities[drum_type] else 1.0
+        if max_velocity > 0:
+            for hit in hits:
+                hit[1] /= max_velocity # Normalize to 0-1 range
+        print(f"      ✓ {drum_type.capitalize()}: {len(hits)} hits detected")
+
+    return all_hits
+
 
 def main():
-    print_header("AUDIO PROCESSING PIPELINE")
-    check_input_file()
-    stems = separate_stems()
-    drum_data = analyze_drum_triggers(stems)
-    save_trigger_data(drum_data)
+    """
+    Main orchestration function.
+    """
+    if len(sys.argv) < 2:
+        print("❌ ERROR: Please provide the path to an audio file.")
+        print(f"   Usage: python {sys.argv[0]} your_track.wav")
+        sys.exit(1)
+
+    track_path = Path(sys.argv[1]).resolve()
+    if not track_path.exists():
+        print(f"❌ ERROR: Input audio file not found at '{track_path}'")
+        sys.exit(1)
+
+    print_header()
+
+    try:
+        # 1. Separate audio into stems
+        drum_stem_path, sample_rate = separate_stems(track_path)
+
+        # 2. Analyze drum hits from the drum stem
+        trigger_data = analyze_drum_hits(drum_stem_path, sample_rate)
+
+        # 3. Save trigger data to JSON
+        output_json_path = Path("drum-data.json")
+        with open(output_json_path, "w") as f:
+            json.dump(trigger_data, f, indent=2)
+        print(f"\n✓ Successfully saved trigger data to {output_json_path}")
+
+    except Exception as e:
+        print(f"\nERROR: Audio processing failed. Reason: {e}")
+        sys.exit(1)
+
+    print_footer()
+
 
 if __name__ == "__main__":
     main()
