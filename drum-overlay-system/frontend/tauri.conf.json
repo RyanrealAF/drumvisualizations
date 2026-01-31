@@ -1,0 +1,96 @@
+{
+  "identifier": "com.ryanrealaf.drumviz",
+  "build": {
+    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run dev"
+  },
+  "package": {
+    "productName": "Drum Visualization System",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "category": "DeveloperTool",
+      "copyright": "© 2024 RyanRealAF",
+      "deb": {
+        "depends": []
+      },
+      "externalBin": [],
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ],
+      "longDescription": "Real-time drum visualization system with 3D overlays and audio analysis",
+      "macOS": {
+        "entitlements": null,
+        "exceptionDomain": "",
+        "frameworks": [],
+        "providerShortName": null,
+        "signingIdentity": null
+      },
+      "resources": [
+        "public/**/*",
+        "drum-data.json"
+      ],
+      "shortDescription": "Drum visualization and overlay system",
+      "targets": "all",
+      "windows": {
+        "certificateThumbprint": null,
+        "digestAlgorithm": "sha256",
+        "timestampUrl": ""
+      }
+    },
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';"
+    },
+    "systemTray": {
+      "iconPath": "icons/icon.png",
+      "menuOnLeftClick": true
+    },
+    "windows": [
+      {
+        "alwaysOnTop": false,
+        "center": true,
+        "decorations": true,
+        "height": 768,
+        "maximizable": true,
+        "minHeight": 400,
+        "minimizable": true,
+        "minWidth": 600,
+        "resizable": true,
+        "skipTaskbar": false,
+        "title": "Drum Visualization System",
+        "titleBarStyle": "visible",
+        "width": 1024,
+        "visible": true
+      },
+      {
+        "alwaysOnTop": true,
+        "center": true,
+        "decorations": false,
+        "height": 1080,
+        "maximizable": false,
+        "minHeight": 1080,
+        "minimizable": false,
+        "minWidth": 1920,
+        "resizable": false,
+        "skipTaskbar": true,
+        "title": "Drum Overlay",
+        "titleBarStyle": "hidden",
+        "width": 1920,
+        "visible": false
+      }
+    ]
+  }
+}

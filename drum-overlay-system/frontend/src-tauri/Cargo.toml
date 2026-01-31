@@ -1,0 +1,27 @@
+[package]
+name = "drum-viz"
+version = "1.0.0"
+description = "Drum Visualization System"
+default-run = "drum-viz"
+authors = ["RyanRealAF"]
+edition = "2021"
+rust-version = "1.76"
+license = "MIT"
+repository = "https://github.com/RyanrealAF/drumvisualizations"
+
+[build-dependencies]
+tauri-build = { version = "2.0.0", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+tauri = { version = "2.0.0", features = [] }
+
+[features]
+# by default Tauri runs in production mode
+# when `tauri dev` runs, `dev` is enabled and `custom-protocol` is disabled
+dev = []
+# this enables `tauri://` custom protocol
+# when this feature is disabled, `tauri dev` uses `http://` to serve the page
+# and `tauri build` uses `https://` to serve the page
+custom-protocol = ["tauri/custom-protocol"]
