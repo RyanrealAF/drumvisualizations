@@ -1,0 +1,2 @@
+# Requirements for Auto Trigger System
+watchdog>=3.0.0
